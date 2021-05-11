@@ -1,12 +1,18 @@
 #include "high_score_server.h"
 
+#include <chrono>
+#include <iostream>
+#include <fstream>
+#include <sstream>
+#include <thread>
+
 HighScoreServer::HighScoreServer() : Server(8420) {
   std::cerr << "Started high score server on localhost:8420" << std::endl;
 
   std::ifstream reader("scores.db");
   Score score;
   while (reader) {
-    if (reader >> score) scores_[score.game].push_back(score);
+    if (reader >> score) scores_[score.game].insert(score);
   }
 }
 
@@ -15,21 +21,20 @@ void HighScoreServer::receive(Socket& client, const std::string& data) {
   std::ostringstream output;
 
   Score score;
+
   if (input >> score) {
+    std::cerr << "Got score: " << score << std::endl;
+
     auto& game = scores_[score.game];
+    game.insert(score);
 
-    if (score.score > 0) {
-      auto it = game.begin();
-      for (; it != game.end(); ++it) {
-        if (it->score < score.score) break;
-      }
-      game.insert(it, score);
-    }
-
+    output << score.game << " " << game.size() << std::endl;
     for (const auto& score : game) {
       output << score << std::endl;
     }
   }
+
+  std::this_thread::sleep_for(std::chrono::seconds(2));
 
   client.send(output.str());
 }
@@ -44,14 +49,4 @@ void HighScoreServer::shutdown() {
   }
 
   std::cerr << "Shutting down" << std::endl;
-}
-
-std::ostream& operator<<(std::ostream& out, const HighScoreServer::Score& score) {
-  out << score.game << " " << score.name << " " << score.score;
-  return out;
-}
-
-std::istream& operator>>(std::istream& in, HighScoreServer::Score& score) {
-  in >> score.game >> score.name >> score.score;
-  return in;
 }
